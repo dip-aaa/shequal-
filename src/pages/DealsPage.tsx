@@ -19,17 +19,25 @@ import {
   ChevronDown,
   X,
   Sparkles,
-  Tag
+  Tag,
+  ExternalLink,
+  Loader
 } from 'lucide-react';
+import { fetchDeals, searchDeals, fetchDealsByCategory, Deal } from '../services/dealsService';
 
 const DealsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedFilter, setSelectedFilter] = useState('trending');
   const [showFilters, setShowFilters] = useState(false);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const categories = ['All', 'Fashion', 'Beauty', 'Health', 'Food', 'Electronics', 'Home'];
+  // Get unique categories from the deals
+  const [categories, setCategories] = useState<string[]>(['All']);
+
   const filters = [
     { id: 'trending', label: 'Trending', icon: TrendingUp },
     { id: 'expiring', label: 'Expiring Soon', icon: Clock },
@@ -37,118 +45,83 @@ const DealsPage = () => {
     { id: 'newest', label: 'Newest', icon: Sparkles },
   ];
 
-  const deals = [
-    {
-      id: 1,
-      brand: 'Nike',
-      title: 'Air Max 270 Women\'s Shoes',
-      originalPrice: 150,
-      discountPrice: 89.99,
-      discount: 40,
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=300&fit=crop',
-      category: 'Fashion',
-      expires: '2 days',
-      rating: 4.8,
-      reviews: 1247,
-      description: 'Comfortable and stylish athletic shoes perfect for everyday wear.',
-      isHot: true,
-      isExpiring: false,
-      saved: 156,
-      location: 'Online & In Store'
-    },
-    {
-      id: 2,
-      brand: 'Sephora',
-      title: 'Rare Beauty Makeup Set',
-      originalPrice: 89.99,
-      discountPrice: 67.49,
-      discount: 25,
-      image: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&h=300&fit=crop',
-      category: 'Beauty',
-      expires: '5 hours',
-      rating: 4.9,
-      reviews: 892,
-      description: 'Complete makeup collection featuring foundation, lipstick, and more.',
-      isHot: true,
-      isExpiring: true,
-      saved: 234,
-      location: 'Online Only'
-    },
-    {
-      id: 3,
-      brand: 'Lululemon',
-      title: 'Align High-Rise Leggings',
-      originalPrice: 128,
-      discountPrice: 89.60,
-      discount: 30,
-      image: 'https://images.unsplash.com/photo-1506629905607-24218193fde4?w=400&h=300&fit=crop',
-      category: 'Fashion',
-      expires: '1 day',
-      rating: 4.7,
-      reviews: 2103,
-      description: 'Buttery-soft leggings perfect for yoga and everyday comfort.',
-      isHot: false,
-      isExpiring: false,
-      saved: 89,
-      location: 'Online & In Store'
-    },
-    {
-      id: 4,
-      brand: 'Apple',
-      title: 'AirPods Pro (2nd generation)',
-      originalPrice: 249,
-      discountPrice: 199.99,
-      discount: 20,
-      image: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=400&h=300&fit=crop',
-      category: 'Electronics',
-      expires: '3 days',
-      rating: 4.6,
-      reviews: 3567,
-      description: 'Active noise cancellation and spatial audio technology.',
-      isHot: false,
-      isExpiring: false,
-      saved: 445,
-      location: 'Online & In Store'
-    },
-    {
-      id: 5,
-      brand: 'Whole Foods',
-      title: 'Organic Beauty Bundle',
-      originalPrice: 75,
-      discountPrice: 45,
-      discount: 40,
-      image: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=300&fit=crop',
-      category: 'Health',
-      expires: '6 hours',
-      rating: 4.5,
-      reviews: 567,
-      description: 'Complete organic skincare routine with natural ingredients.',
-      isHot: true,
-      isExpiring: true,
-      saved: 78,
-      location: 'In Store Only'
-    },
-    {
-      id: 6,
-      brand: 'Target',
-      title: 'Home Decor Collection',
-      originalPrice: 199.99,
-      discountPrice: 149.99,
-      discount: 25,
-      image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop',
-      category: 'Home',
-      expires: '4 days',
-      rating: 4.4,
-      reviews: 234,
-      description: 'Beautiful home accessories to transform your living space.',
-      isHot: false,
-      isExpiring: false,
-      saved: 123,
-      location: 'Online & In Store'
-    }
-  ];
+  // Load deals on component mount
+  useEffect(() => {
+    const loadDeals = async () => {
+      try {
+        setLoading(true);
+        const fetchedDeals = await fetchDeals();
+        setDeals(fetchedDeals);
+        
+        // Extract unique categories
+        const uniqueCategories = ['All', ...new Set(fetchedDeals.map(deal => deal.category))];
+        setCategories(uniqueCategories);
+        
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load deals. Please try again later.');
+        setLoading(false);
+        console.error('Error loading deals:', err);
+      }
+    };
+    
+    loadDeals();
+  }, []);
 
-  const toggleFavorite = (dealId: number) => {
+  // Handle search
+  useEffect(() => {
+    const handleSearch = async () => {
+      if (searchTerm.trim() === '') {
+        // If search is cleared, load all deals
+        const fetchedDeals = await fetchDeals();
+        setDeals(fetchedDeals);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        const searchResults = await searchDeals(searchTerm);
+        setDeals(searchResults);
+        setLoading(false);
+      } catch (err) {
+        setError('Search failed. Please try again.');
+        setLoading(false);
+      }
+    };
+    
+    // Debounce search to avoid too many API calls
+    const debounceTimer = setTimeout(() => {
+      handleSearch();
+    }, 500);
+    
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm]);
+
+  // Handle category filter
+  useEffect(() => {
+    const filterByCategory = async () => {
+      try {
+        setLoading(true);
+        
+        if (selectedCategory === 'All') {
+          const fetchedDeals = await fetchDeals();
+          setDeals(fetchedDeals);
+        } else {
+          const categoryDeals = await fetchDealsByCategory(selectedCategory);
+          setDeals(categoryDeals);
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to filter deals. Please try again.');
+        setLoading(false);
+      }
+    };
+    
+    filterByCategory();
+  }, [selectedCategory]);
+
+  const toggleFavorite = (dealId: string) => {
     setFavorites(prev => 
       prev.includes(dealId) 
         ? prev.filter(id => id !== dealId)
@@ -156,12 +129,40 @@ const DealsPage = () => {
     );
   };
 
-  const filteredDeals = deals.filter(deal => {
-    const matchesSearch = deal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         deal.brand.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || deal.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+  // Apply any additional filtering based on the selected filter
+  const filteredDeals = [...deals].sort((a, b) => {
+    if (selectedFilter === 'highest') {
+      return b.discountPercentage - a.discountPercentage;
+    } else if (selectedFilter === 'expiring' && a.expiryDate && b.expiryDate) {
+      return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+    } else {
+      // Default sort (trending or newest)
+      return 0; // In a real app, you'd have a trending score or date created
+    }
   });
+
+  // Function to calculate days remaining until expiry
+  const getDaysRemaining = (expiryDateStr?: string) => {
+    if (!expiryDateStr) return "Limited time";
+    
+    const expiryDate = new Date(expiryDateStr);
+    const today = new Date();
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays <= 0) return "Expired";
+    if (diffDays === 1) return "1 day";
+    if (diffDays < 1) {
+      const hours = Math.ceil(diffTime / (1000 * 60 * 60));
+      return `${hours} hours`;
+    }
+    return `${diffDays} days`;
+  };
+
+  // Function to open the deal in a new tab
+  const openDealLink = (link: string) => {
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -312,157 +313,138 @@ const DealsPage = () => {
         variants={containerVariants}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       >
-        {filteredDeals.map((deal) => (
-          <motion.div
-            key={deal.id}
-            variants={cardVariants}
-            whileHover={{ y: -10, boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}
-            className="bg-white rounded-2xl overflow-hidden shadow-lg group"
+        {loading ? (
+          <div className="flex justify-center items-center py-20">
+            <Loader size={40} className="text-emerald-500 animate-spin" />
+            <span className="ml-3 text-emerald-600 font-medium">Loading deals...</span>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <p className="text-red-600 mb-2">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="text-emerald-600 underline font-medium"
+            >
+              Try again
+            </button>
+          </div>
+        ) : filteredDeals.length === 0 ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center">
+            <ShoppingBag size={40} className="mx-auto text-gray-400 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-700 mb-1">No deals found</h3>
+            <p className="text-gray-500 mb-4">Try adjusting your filters or search term</p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setSelectedCategory('All');
+              }}
+              className="px-5 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <motion.div 
+            variants={containerVariants}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {/* Image Section */}
-            <div className="relative">
-              <img 
-                src={deal.image} 
-                alt={deal.title}
-                className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-              
-              {/* Badges */}
-              <div className="absolute top-4 left-4 flex flex-col gap-2">
-                {deal.isHot && (
-                  <motion.div 
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center"
+            {filteredDeals.map(deal => (
+              <motion.div
+                key={deal.id}
+                variants={cardVariants}
+                whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-shadow"
+              >
+                <div className="relative">
+                  <img 
+                    src={deal.imageUrl} 
+                    alt={deal.title} 
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="absolute top-0 left-0 m-3">
+                    <div className="bg-emerald-500 text-white text-sm font-bold px-2 py-1 rounded-md">
+                      {deal.discountPercentage}% OFF
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => toggleFavorite(deal.id)}
+                    className="absolute top-0 right-0 m-3 p-2 bg-white rounded-full shadow-sm hover:bg-gray-50"
                   >
-                    <Flame className="w-3 h-3 mr-1" />
-                    HOT
-                  </motion.div>
-                )}
-                {deal.isExpiring && (
-                  <motion.div 
-                    animate={{ opacity: [1, 0.5, 1] }}
-                    transition={{ duration: 1, repeat: Infinity }}
-                    className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center"
-                  >
-                    <Clock className="w-3 h-3 mr-1" />
-                    EXPIRING
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Discount Badge */}
-              <div className="absolute top-4 right-4 bg-emerald-500 text-white px-3 py-2 rounded-xl font-bold text-lg">
-                {deal.discount}% OFF
-              </div>
-
-              {/* Action Buttons */}
-              <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => toggleFavorite(deal.id)}
-                  className={`p-2 rounded-full shadow-lg transition-colors ${
-                    favorites.includes(deal.id)
-                      ? 'bg-red-500 text-white'
-                      : 'bg-white text-gray-600 hover:text-red-500'
-                  }`}
-                >
-                  <Heart className={`w-4 h-4 ${favorites.includes(deal.id) ? 'fill-current' : ''}`} />
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  className="p-2 bg-white text-gray-600 rounded-full shadow-lg hover:text-emerald-600 transition-colors"
-                >
-                  <Share2 className="w-4 h-4" />
-                </motion.button>
-              </div>
-            </div>
-
-            {/* Content Section */}
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-emerald-600 font-medium text-sm">{deal.brand}</span>
-                <div className="flex items-center">
-                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                  <span className="text-sm text-gray-600 ml-1">{deal.rating} ({deal.reviews})</span>
+                    <Heart 
+                      size={18} 
+                      className={favorites.includes(deal.id) ? "fill-red-500 text-red-500" : "text-gray-400"} 
+                    />
+                  </button>
                 </div>
-              </div>
-
-              <h3 className="font-semibold text-gray-800 mb-2 line-clamp-2">{deal.title}</h3>
-              <p className="text-gray-600 text-sm mb-4 line-clamp-2">{deal.description}</p>
-
-              {/* Price */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <span className="text-2xl font-bold text-gray-800">${deal.discountPrice}</span>
-                  <span className="text-gray-500 line-through ml-2">${deal.originalPrice}</span>
+                
+                <div className="p-5">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-semibold text-lg text-gray-800 line-clamp-1">{deal.title}</h3>
+                      <p className="text-gray-500 text-sm">{deal.store}</p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{deal.description}</p>
+                  
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <span className="text-lg font-bold text-gray-800">${deal.price.toFixed(2)}</span>
+                      <span className="text-sm text-gray-500 line-through ml-2">${deal.originalPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center text-amber-500">
+                      <Tag size={16} className="mr-1" />
+                      <span className="text-sm font-medium">{deal.category}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
+                    <div className="flex items-center">
+                      <Clock size={14} className="mr-1" />
+                      <span>Expires in {getDaysRemaining(deal.expiryDate)}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => openDealLink(deal.link)}
+                      className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium flex items-center justify-center"
+                    >
+                      <ExternalLink size={16} className="mr-1.5" />
+                      Get Deal
+                    </button>
+                    <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+                      <Share2 size={18} className="text-gray-500" />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-emerald-600 font-semibold">Save ${(deal.originalPrice - deal.discountPrice).toFixed(2)}</p>
-                </div>
-              </div>
-
-              {/* Details */}
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                <div className="flex items-center">
-                  <Clock className="w-4 h-4 mr-1" />
-                  <span>Expires in {deal.expires}</span>
-                </div>
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 mr-1" />
-                  <span>{deal.saved} saved</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
-                <div className="flex items-center">
-                  <MapPin className="w-4 h-4 mr-1" />
-                  <span>{deal.location}</span>
-                </div>
-                <div className="flex items-center">
-                  <Tag className="w-4 h-4 mr-1" />
-                  <span>{deal.category}</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center"
-                >
-                  <ShoppingBag className="w-4 h-4 mr-2" />
-                  Get Deal
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                >
-                  <Bookmark className="w-4 h-4" />
-                </motion.button>
-              </div>
-            </div>
+              </motion.div>
+            ))}
           </motion.div>
-        ))}
-      </motion.div>
+        )}
 
-      {/* Load More */}
-      <motion.div 
-        variants={cardVariants}
-        className="text-center mt-12"
-      >
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="px-8 py-4 bg-white border border-emerald-200 text-emerald-600 rounded-xl font-medium hover:bg-emerald-50 transition-colors flex items-center mx-auto"
-        >
-          <Zap className="w-5 h-5 mr-2" />
-          Load More Deals
-        </motion.button>
+        {/* Pagination - For future implementation */}
+        {!loading && !error && filteredDeals.length > 0 && (
+          <div className="mt-10 flex justify-center">
+            <div className="flex space-x-1">
+              <button className="px-4 py-2 border border-gray-300 rounded-l-lg hover:bg-gray-50">
+                Previous
+              </button>
+              <button className="px-4 py-2 bg-emerald-500 text-white border border-emerald-500">
+                1
+              </button>
+              <button className="px-4 py-2 border border-gray-300 hover:bg-gray-50">
+                2
+              </button>
+              <button className="px-4 py-2 border border-gray-300 hover:bg-gray-50">
+                3
+              </button>
+              <button className="px-4 py-2 border border-gray-300 rounded-r-lg hover:bg-gray-50">
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
